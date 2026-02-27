@@ -32,7 +32,9 @@ function MapView({
   const locationItems = locationResult?.items ?? [];
 
   return (
-    <section className={`${panelClass} ${desktopPanelHeightClass} overflow-hidden`}>
+    <section
+      className={`${panelClass} ${desktopPanelHeightClass} overflow-hidden`}
+    >
       <div className="border-b border-slate-200 px-4 py-3">
         <p className="text-sm font-semibold text-slate-900">위치 국가 분류</p>
         <p className="mt-0.5 text-xs text-slate-500">
@@ -64,12 +66,22 @@ function MapView({
 
         <div className="grid gap-2 text-sm sm:grid-cols-4">
           {[
-            { label: "대상 파일", value: locationResult?.totalCandidates ?? "-" },
+            {
+              label: "대상 파일",
+              value: locationResult?.totalCandidates ?? "-",
+            },
             { label: "좌표 추출됨", value: locationResult?.located ?? "-" },
             { label: "사진 위치", value: locationResult ? locatedPhotos : "-" },
-            { label: "동영상 위치", value: locationResult ? locatedVideos : "-" },
+            {
+              label: "동영상 위치",
+              value: locationResult ? locatedVideos : "-",
+            },
           ].map((item) => (
-            <SummaryStatCard key={item.label} label={item.label} value={item.value} />
+            <SummaryStatCard
+              key={item.label}
+              label={item.label}
+              value={item.value}
+            />
           ))}
         </div>
 

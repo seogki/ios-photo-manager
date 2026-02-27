@@ -12,6 +12,7 @@ import type {
 
 const ITEM_HEIGHT_SINGLE = 188;
 const ITEM_HEIGHT_DOUBLE = 172;
+const ITEM_HEIGHT_TRIPLE = 172;
 const PREVIEW_PAGE_SIZE = 20;
 const MAX_RENDERED_PREVIEWS = 100;
 
@@ -29,8 +30,11 @@ function App({ activeTab }: { activeTab: "manager" | "map" }) {
   const [previewLoadedCount, setPreviewLoadedCount] =
     useState(PREVIEW_PAGE_SIZE);
   const [previewScrollTop, setPreviewScrollTop] = useState(0);
-  const [previewLayout, setPreviewLayout] = useState<"single" | "double">(
-    "single",
+  const [previewLayout, setPreviewLayout] = useState<
+    "single" | "double" | "triple"
+  >("single");
+  const [previewFitMode, setPreviewFitMode] = useState<"contain" | "cover">(
+    "contain",
   );
   const previewScrollRef = useRef<HTMLDivElement | null>(null);
   const previewScrollFrameRef = useRef<number | null>(null);
@@ -42,12 +46,18 @@ function App({ activeTab }: { activeTab: "manager" | "map" }) {
   });
   const baseButtonClass =
     "rounded-lg border border-slate-200 bg-slate-800 px-3.5 py-2 text-sm font-semibold text-white transition-colors hover:bg-slate-700 disabled:cursor-not-allowed disabled:border-slate-200 disabled:bg-slate-300";
-  const panelClass = "rounded-2xl border border-slate-200 bg-white/95 shadow-sm";
+  const panelClass =
+    "rounded-2xl border border-slate-200 bg-white/95 shadow-sm";
   const desktopPanelHeightClass = "lg:h-[calc(100vh-7.5rem)]";
   const previewItems = scanResult?.previews ?? [];
-  const previewColumns = previewLayout === "double" ? 2 : 1;
+  const previewColumns =
+    previewLayout === "triple" ? 3 : previewLayout === "double" ? 2 : 1;
   const previewItemHeight =
-    previewLayout === "double" ? ITEM_HEIGHT_DOUBLE : ITEM_HEIGHT_SINGLE;
+    previewLayout === "triple"
+      ? ITEM_HEIGHT_TRIPLE
+      : previewLayout === "double"
+        ? ITEM_HEIGHT_DOUBLE
+        : ITEM_HEIGHT_SINGLE;
   const previewPageRows = Math.max(
     1,
     Math.ceil(PREVIEW_PAGE_SIZE / previewColumns),
@@ -210,7 +220,9 @@ function App({ activeTab }: { activeTab: "manager" | "map" }) {
       }
 
       const nextScrollTop = element.scrollTop;
-      setPreviewScrollTop((prev) => (prev === nextScrollTop ? prev : nextScrollTop));
+      setPreviewScrollTop((prev) =>
+        prev === nextScrollTop ? prev : nextScrollTop,
+      );
 
       const visibleBottomRow = Math.floor(
         (nextScrollTop + element.clientHeight) / previewItemHeight,
@@ -228,7 +240,9 @@ function App({ activeTab }: { activeTab: "manager" | "map" }) {
           return requiredLoadedCount;
         }
 
-        const loadedRows = Math.ceil(Math.min(prev, previewItems.length) / previewColumns);
+        const loadedRows = Math.ceil(
+          Math.min(prev, previewItems.length) / previewColumns,
+        );
         const stepCount = previewPageRows * previewColumns;
         if (
           visibleBottomRow >= loadedRows - previewPageRows / 2 &&
@@ -256,8 +270,12 @@ function App({ activeTab }: { activeTab: "manager" | "map" }) {
         element.scrollTop = 0;
       }
     } else if (layoutChanged && element) {
-      const prevTotalRows = Math.ceil(Math.max(1, previewItems.length) / prev.columns);
-      const nextTotalRows = Math.ceil(Math.max(1, previewItems.length) / previewColumns);
+      const prevTotalRows = Math.ceil(
+        Math.max(1, previewItems.length) / prev.columns,
+      );
+      const nextTotalRows = Math.ceil(
+        Math.max(1, previewItems.length) / previewColumns,
+      );
       const prevScrollable = Math.max(
         0,
         prevTotalRows * prev.itemHeight - element.clientHeight,
@@ -268,7 +286,10 @@ function App({ activeTab }: { activeTab: "manager" | "map" }) {
       );
       const progress =
         prevScrollable > 0 ? element.scrollTop / prevScrollable : 0;
-      const nextScrollTop = Math.max(0, Math.min(nextScrollable, nextScrollable * progress));
+      const nextScrollTop = Math.max(
+        0,
+        Math.min(nextScrollable, nextScrollable * progress),
+      );
       element.scrollTop = nextScrollTop;
       setPreviewScrollTop(nextScrollTop);
       setPreviewLoadedCount((current) =>
@@ -419,6 +440,7 @@ function App({ activeTab }: { activeTab: "manager" | "map" }) {
                 visiblePreviewItems={visiblePreviewItems}
                 previewWindow={previewWindow}
                 previewLayout={previewLayout}
+                previewFitMode={previewFitMode}
                 previewScrollRef={previewScrollRef}
                 onPickFolder={handlePickFolder}
                 onScan={() => {
@@ -428,11 +450,8 @@ function App({ activeTab }: { activeTab: "manager" | "map" }) {
                   void handleProcess(action);
                 }}
                 onPreviewScroll={handlePreviewScroll}
-                onTogglePreviewLayout={() => {
-                  setPreviewLayout((prev) =>
-                    prev === "single" ? "double" : "single",
-                  );
-                }}
+                onSetPreviewLayout={setPreviewLayout}
+                onSetPreviewFitMode={setPreviewFitMode}
               />
             ) : (
               <MapView

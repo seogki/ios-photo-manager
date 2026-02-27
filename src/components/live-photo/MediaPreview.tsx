@@ -3,9 +3,11 @@ import { toFileSrc } from "./utils";
 export function PhotoPreview({
   photoPath,
   baseName,
+  fitMode = "contain",
 }: {
   photoPath?: string;
   baseName: string;
+  fitMode?: "contain" | "cover";
 }) {
   if (!photoPath) {
     return (
@@ -24,7 +26,7 @@ export function PhotoPreview({
       alt={`photo-${baseName}`}
       loading="lazy"
       decoding="async"
-      className="h-full w-full object-contain"
+      className={`h-full w-full ${fitMode === "cover" ? "object-cover" : "object-contain"}`}
     />
   );
 }

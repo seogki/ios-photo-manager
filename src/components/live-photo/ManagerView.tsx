@@ -22,9 +22,10 @@ function getUpperExtension(filePath?: string) {
 }
 
 function getPreviewExtensions(photoPath?: string, videoPath?: string) {
-  const extensions = [getUpperExtension(photoPath), getUpperExtension(videoPath)].filter(
-    (ext): ext is string => Boolean(ext),
-  );
+  const extensions = [
+    getUpperExtension(photoPath),
+    getUpperExtension(videoPath),
+  ].filter((ext): ext is string => Boolean(ext));
   if (extensions.length === 0) {
     return "";
   }
@@ -46,12 +47,14 @@ function ManagerView({
   visiblePreviewItems,
   previewWindow,
   previewLayout,
+  previewFitMode,
   previewScrollRef,
   onPickFolder,
   onScan,
   onProcess,
   onPreviewScroll,
-  onTogglePreviewLayout,
+  onSetPreviewLayout,
+  onSetPreviewFitMode,
 }: {
   panelClass: string;
   desktopPanelHeightClass: string;
@@ -66,13 +69,15 @@ function ManagerView({
   previewItems: ScanPreviewItem[];
   visiblePreviewItems: ScanPreviewItem[];
   previewWindow: PreviewWindow;
-  previewLayout: "single" | "double";
+  previewLayout: "single" | "double" | "triple";
+  previewFitMode: "contain" | "cover";
   previewScrollRef: RefObject<HTMLDivElement>;
   onPickFolder: () => void;
   onScan: () => void;
   onProcess: (action: ProcessAction) => void;
   onPreviewScroll: (event: UIEvent<HTMLDivElement>) => void;
-  onTogglePreviewLayout: () => void;
+  onSetPreviewLayout: (layout: "single" | "double" | "triple") => void;
+  onSetPreviewFitMode: (mode: "contain" | "cover") => void;
 }) {
   return (
     <div className="grid gap-3 lg:h-full lg:grid-cols-[1.28fr_1fr] lg:items-stretch">
@@ -194,13 +199,65 @@ function ManagerView({
         <div className="flex items-center justify-between border-b border-slate-200 px-1 pb-2 text-sm text-slate-600">
           <p className="font-semibold text-slate-900">미리보기</p>
           <div className="flex items-center gap-2">
-            <button
-              type="button"
-              className="rounded border border-slate-200 bg-white px-1.5 py-0.5 text-[11px] font-semibold text-slate-700 hover:bg-slate-50"
-              onClick={onTogglePreviewLayout}
-            >
-              {previewLayout === "single" ? "2열" : "1열"}
-            </button>
+            <div className="inline-flex overflow-hidden rounded border border-slate-200 bg-white text-[11px]">
+              <button
+                type="button"
+                className={`px-1.5 py-0.5 font-semibold ${
+                  previewLayout === "single"
+                    ? "bg-slate-900 text-white"
+                    : "text-slate-700 hover:bg-slate-50"
+                }`}
+                onClick={() => onSetPreviewLayout("single")}
+              >
+                1열
+              </button>
+              <button
+                type="button"
+                className={`border-l border-slate-200 px-1.5 py-0.5 font-semibold ${
+                  previewLayout === "double"
+                    ? "bg-slate-900 text-white"
+                    : "text-slate-700 hover:bg-slate-50"
+                }`}
+                onClick={() => onSetPreviewLayout("double")}
+              >
+                2열
+              </button>
+              <button
+                type="button"
+                className={`border-l border-slate-200 px-1.5 py-0.5 font-semibold ${
+                  previewLayout === "triple"
+                    ? "bg-slate-900 text-white"
+                    : "text-slate-700 hover:bg-slate-50"
+                }`}
+                onClick={() => onSetPreviewLayout("triple")}
+              >
+                3열
+              </button>
+            </div>
+            <div className="inline-flex overflow-hidden rounded border border-slate-200 bg-white text-[11px]">
+              <button
+                type="button"
+                className={`px-1.5 py-0.5 font-semibold ${
+                  previewFitMode === "contain"
+                    ? "bg-slate-900 text-white"
+                    : "text-slate-700 hover:bg-slate-50"
+                }`}
+                onClick={() => onSetPreviewFitMode("contain")}
+              >
+                contain
+              </button>
+              <button
+                type="button"
+                className={`border-l border-slate-200 px-1.5 py-0.5 font-semibold ${
+                  previewFitMode === "cover"
+                    ? "bg-slate-900 text-white"
+                    : "text-slate-700 hover:bg-slate-50"
+                }`}
+                onClick={() => onSetPreviewFitMode("cover")}
+              >
+                cover
+              </button>
+            </div>
             <p>{previewItems.length}개</p>
           </div>
         </div>
@@ -248,6 +305,7 @@ function ManagerView({
                           <PhotoPreview
                             photoPath={item.photoPath}
                             baseName={item.baseName}
+                            fitMode={previewFitMode}
                           />
                         </div>
                         <div className="overflow-hidden rounded border border-slate-200 bg-slate-100">
@@ -265,7 +323,7 @@ function ManagerView({
                     </article>
                   ))}
                 </>
-              ) : (
+              ) : previewLayout === "double" ? (
                 <div className="grid grid-cols-2 gap-2">
                   {visiblePreviewItems.map((item, index) => (
                     <article
@@ -292,6 +350,7 @@ function ManagerView({
                           <PhotoPreview
                             photoPath={item.photoPath}
                             baseName={item.baseName}
+                            fitMode={previewFitMode}
                           />
                         ) : (
                           <VideoPreview videoPath={item.videoPath} />
@@ -299,6 +358,46 @@ function ManagerView({
                       </div>
                       <div className="mt-1 truncate text-[10px] text-slate-500">
                         {getFileName(item.photoPath ?? item.videoPath ?? "-")}
+                      </div>
+                    </article>
+                  ))}
+                </div>
+              ) : (
+                <div className="grid grid-cols-3 gap-2">
+                  {visiblePreviewItems.map((item, index) => (
+                    <article
+                      key={item.id}
+                      className="h-[164px] overflow-hidden rounded-lg border border-slate-200 bg-white p-1.5"
+                    >
+                      <div className="mb-1 flex items-center justify-between gap-1">
+                        <div className="truncate text-[11px] font-semibold text-slate-700">
+                          {previewWindow.start + index + 1}. {item.baseName}
+                          {getPreviewExtensions(item.photoPath, item.videoPath)}
+                        </div>
+                        <span
+                          className={`shrink-0 rounded px-1 py-0.5 text-[10px] font-semibold ${item.photoPath && item.videoPath ? "bg-emerald-100 text-emerald-700" : item.videoPath ? "bg-blue-100 text-blue-700" : "bg-amber-100 text-amber-700"}`}
+                        >
+                          {item.photoPath && item.videoPath
+                            ? "쌍"
+                            : item.videoPath
+                              ? "동영상만"
+                              : "사진만"}
+                        </span>
+                      </div>
+                      <div className="h-[128px] overflow-hidden rounded border border-slate-200 bg-slate-100">
+                        {item.photoPath ? (
+                          <PhotoPreview
+                            photoPath={item.photoPath}
+                            baseName={item.baseName}
+                            fitMode={previewFitMode}
+                          />
+                        ) : (
+                          <VideoPreview videoPath={item.videoPath} />
+                        )}
+                      </div>
+                      <div className="mt-1 truncate text-[10px] text-slate-500">
+                        {getPreviewExtensions(item.photoPath, item.videoPath) ||
+                          "-"}
                       </div>
                     </article>
                   ))}
