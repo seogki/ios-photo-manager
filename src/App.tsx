@@ -10,7 +10,8 @@ import type {
   ScanResult,
 } from "./components/live-photo/types";
 
-const ITEM_HEIGHT = 188;
+const ITEM_HEIGHT_SINGLE = 188;
+const ITEM_HEIGHT_DOUBLE = 172;
 const PREVIEW_PAGE_SIZE = 20;
 const MAX_RENDERED_PREVIEWS = 100;
 
@@ -28,14 +29,37 @@ function App({ activeTab }: { activeTab: "manager" | "map" }) {
   const [previewLoadedCount, setPreviewLoadedCount] =
     useState(PREVIEW_PAGE_SIZE);
   const [previewScrollTop, setPreviewScrollTop] = useState(0);
+  const [previewLayout, setPreviewLayout] = useState<"single" | "double">(
+    "single",
+  );
   const previewScrollRef = useRef<HTMLDivElement | null>(null);
   const previewScrollFrameRef = useRef<number | null>(null);
   const pendingPreviewScrollRef = useRef<HTMLDivElement | null>(null);
+  const previousPreviewMetricsRef = useRef({
+    itemsLength: 0,
+    columns: 1,
+    itemHeight: ITEM_HEIGHT_SINGLE,
+  });
   const baseButtonClass =
     "rounded-lg border border-slate-200 bg-slate-800 px-3.5 py-2 text-sm font-semibold text-white transition-colors hover:bg-slate-700 disabled:cursor-not-allowed disabled:border-slate-200 disabled:bg-slate-300";
   const panelClass = "rounded-2xl border border-slate-200 bg-white/95 shadow-sm";
-  const desktopPanelHeightClass = "lg:h-[calc(74vh+4.5rem)]";
+  const desktopPanelHeightClass = "lg:h-[calc(100vh-7.5rem)]";
   const previewItems = scanResult?.previews ?? [];
+  const previewColumns = previewLayout === "double" ? 2 : 1;
+  const previewItemHeight =
+    previewLayout === "double" ? ITEM_HEIGHT_DOUBLE : ITEM_HEIGHT_SINGLE;
+  const previewPageRows = Math.max(
+    1,
+    Math.ceil(PREVIEW_PAGE_SIZE / previewColumns),
+  );
+  const maxRenderedRows = Math.max(
+    1,
+    Math.ceil(MAX_RENDERED_PREVIEWS / previewColumns),
+  );
+  const tabDescription =
+    activeTab === "manager"
+      ? "사진+동영상 쌍을 탐색하고 정리합니다."
+      : "GPS 좌표를 읽어 국가 단위로 분류합니다.";
 
   const canProcess = useMemo(() => {
     const pairCount = scanResult?.pairCount ?? 0;
@@ -188,13 +212,15 @@ function App({ activeTab }: { activeTab: "manager" | "map" }) {
       const nextScrollTop = element.scrollTop;
       setPreviewScrollTop((prev) => (prev === nextScrollTop ? prev : nextScrollTop));
 
-      const visibleBottomIndex = Math.floor(
-        (nextScrollTop + element.clientHeight) / ITEM_HEIGHT,
+      const visibleBottomRow = Math.floor(
+        (nextScrollTop + element.clientHeight) / previewItemHeight,
       );
+      const requiredLoadedRows =
+        Math.ceil((visibleBottomRow + previewPageRows) / previewPageRows) *
+        previewPageRows;
       const requiredLoadedCount = Math.min(
         previewItems.length,
-        Math.ceil((visibleBottomIndex + PREVIEW_PAGE_SIZE) / PREVIEW_PAGE_SIZE) *
-          PREVIEW_PAGE_SIZE,
+        requiredLoadedRows * previewColumns,
       );
 
       setPreviewLoadedCount((prev) => {
@@ -202,12 +228,13 @@ function App({ activeTab }: { activeTab: "manager" | "map" }) {
           return requiredLoadedCount;
         }
 
+        const loadedRows = Math.ceil(Math.min(prev, previewItems.length) / previewColumns);
+        const stepCount = previewPageRows * previewColumns;
         if (
-          visibleBottomIndex >=
-            Math.min(prev, previewItems.length) - PREVIEW_PAGE_SIZE / 2 &&
+          visibleBottomRow >= loadedRows - previewPageRows / 2 &&
           prev < previewItems.length
         ) {
-          return Math.min(previewItems.length, prev + PREVIEW_PAGE_SIZE);
+          return Math.min(previewItems.length, prev + stepCount);
         }
 
         return prev;
@@ -216,13 +243,45 @@ function App({ activeTab }: { activeTab: "manager" | "map" }) {
   }
 
   useEffect(() => {
-    setPreviewLoadedCount(Math.min(PREVIEW_PAGE_SIZE, previewItems.length));
-    setPreviewScrollTop(0);
+    const prev = previousPreviewMetricsRef.current;
     const element = previewScrollRef.current;
-    if (element) {
-      element.scrollTop = 0;
+    const itemsLengthChanged = prev.itemsLength !== previewItems.length;
+    const layoutChanged =
+      prev.columns !== previewColumns || prev.itemHeight !== previewItemHeight;
+
+    if (itemsLengthChanged) {
+      setPreviewLoadedCount(Math.min(PREVIEW_PAGE_SIZE, previewItems.length));
+      setPreviewScrollTop(0);
+      if (element) {
+        element.scrollTop = 0;
+      }
+    } else if (layoutChanged && element) {
+      const prevTotalRows = Math.ceil(Math.max(1, previewItems.length) / prev.columns);
+      const nextTotalRows = Math.ceil(Math.max(1, previewItems.length) / previewColumns);
+      const prevScrollable = Math.max(
+        0,
+        prevTotalRows * prev.itemHeight - element.clientHeight,
+      );
+      const nextScrollable = Math.max(
+        0,
+        nextTotalRows * previewItemHeight - element.clientHeight,
+      );
+      const progress =
+        prevScrollable > 0 ? element.scrollTop / prevScrollable : 0;
+      const nextScrollTop = Math.max(0, Math.min(nextScrollable, nextScrollable * progress));
+      element.scrollTop = nextScrollTop;
+      setPreviewScrollTop(nextScrollTop);
+      setPreviewLoadedCount((current) =>
+        Math.min(previewItems.length, Math.max(current, PREVIEW_PAGE_SIZE)),
+      );
     }
-  }, [previewItems.length]);
+
+    previousPreviewMetricsRef.current = {
+      itemsLength: previewItems.length,
+      columns: previewColumns,
+      itemHeight: previewItemHeight,
+    };
+  }, [previewColumns, previewItemHeight, previewItems.length]);
 
   useEffect(() => {
     return () => {
@@ -244,28 +303,40 @@ function App({ activeTab }: { activeTab: "manager" | "map" }) {
       };
     }
 
-    const maxStart = Math.max(0, loadedCount - MAX_RENDERED_PREVIEWS);
-    const pageBase =
-      Math.floor(previewScrollTop / ITEM_HEIGHT / PREVIEW_PAGE_SIZE) *
-      PREVIEW_PAGE_SIZE;
-    const desiredStart = Math.max(0, pageBase - PREVIEW_PAGE_SIZE);
-    const start = Math.min(desiredStart, maxStart);
-    const end = Math.min(loadedCount, start + MAX_RENDERED_PREVIEWS);
+    const totalRows = Math.ceil(totalCount / previewColumns);
+    const loadedRows = Math.ceil(loadedCount / previewColumns);
+    const maxStartRow = Math.max(0, loadedRows - maxRenderedRows);
+    const pageBaseRow =
+      Math.floor(previewScrollTop / previewItemHeight / previewPageRows) *
+      previewPageRows;
+    const desiredStartRow = Math.max(0, pageBaseRow - previewPageRows);
+    const startRow = Math.min(desiredStartRow, maxStartRow);
+    const endRow = Math.min(loadedRows, startRow + maxRenderedRows);
+    const start = startRow * previewColumns;
+    const end = Math.min(loadedCount, endRow * previewColumns);
 
     return {
       start,
       end,
-      topPadding: start * ITEM_HEIGHT,
-      bottomPadding: (totalCount - end) * ITEM_HEIGHT,
+      topPadding: startRow * previewItemHeight,
+      bottomPadding: (totalRows - endRow) * previewItemHeight,
     };
-  }, [previewItems.length, previewLoadedCount, previewScrollTop]);
+  }, [
+    maxRenderedRows,
+    previewColumns,
+    previewItemHeight,
+    previewItems.length,
+    previewLoadedCount,
+    previewPageRows,
+    previewScrollTop,
+  ]);
 
   const visiblePreviewItems = useMemo(() => {
     return previewItems.slice(previewWindow.start, previewWindow.end);
   }, [previewItems, previewWindow.end, previewWindow.start]);
 
   return (
-    <main className="relative min-h-screen bg-slate-100 px-3 py-4 text-slate-800">
+    <main className="relative min-h-screen bg-slate-100 px-2 py-2 text-slate-800 sm:px-3 sm:py-3 lg:h-screen lg:overflow-hidden">
       {loading && (
         <div className="absolute inset-0 z-10 flex items-center justify-center bg-slate-900/25">
           <div className="flex items-center gap-2 rounded-lg bg-white px-4 py-3 text-sm font-semibold text-slate-800 shadow">
@@ -276,52 +347,62 @@ function App({ activeTab }: { activeTab: "manager" | "map" }) {
       )}
 
       <div className="mx-auto max-w-[1400px] font-['Segoe_UI','Apple_SD_Gothic_Neo',sans-serif] leading-relaxed">
-        <div className="flex gap-3">
-          <aside
-            className={`${panelClass} sticky top-4 hidden w-56 shrink-0 self-start overflow-hidden lg:block`}
-          >
-            <MenuPanel
-              activeTab={activeTab}
-              onSelectManager={() => {
-                void navigate({ to: "/" });
-                setDrawerOpen(false);
-              }}
-              onSelectMap={() => {
-                void navigate({ to: "/map" });
-                setDrawerOpen(false);
-              }}
-            />
-          </aside>
-
-          <div className="min-w-0 flex-1">
-            <header className="mb-3 flex items-start gap-3 rounded-2xl border border-slate-200 bg-white/95 px-4 py-4 shadow-sm sm:px-5">
+        <header className="mb-2 rounded-lg border border-slate-200 bg-white">
+          <div className="flex items-center gap-2 border-b border-slate-200 px-3 py-2">
+            <button
+              type="button"
+              aria-label="메뉴 열기"
+              className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md border border-slate-200 bg-white text-slate-700 sm:hidden"
+              onClick={() => setDrawerOpen(true)}
+            >
+              <span className="sr-only">메뉴 열기</span>
+              <span className="flex w-4 flex-col gap-0.5">
+                <span className="h-0.5 w-full rounded bg-current" />
+                <span className="h-0.5 w-full rounded bg-current" />
+                <span className="h-0.5 w-full rounded bg-current" />
+              </span>
+            </button>
+            <h1 className="text-lg font-extrabold tracking-tight text-slate-900">
+              {activeTab === "manager"
+                ? "iOS Live Photo Manager"
+                : "iOS 미디어 위치 국가 분류"}
+            </h1>
+            <nav className="ml-3 hidden items-center gap-1 sm:flex">
               <button
                 type="button"
-                aria-label="메뉴 열기"
-                className="mt-0.5 inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-700 lg:hidden"
-                onClick={() => setDrawerOpen(true)}
+                className={`rounded px-2.5 py-1 text-sm font-semibold ${
+                  activeTab === "manager"
+                    ? "bg-slate-900 text-white"
+                    : "text-slate-700 hover:bg-slate-100"
+                }`}
+                onClick={() => {
+                  void navigate({ to: "/" });
+                }}
               >
-                <span className="sr-only">메뉴 열기</span>
-                <span className="flex w-5 flex-col gap-1">
-                  <span className="h-0.5 w-full rounded bg-current" />
-                  <span className="h-0.5 w-full rounded bg-current" />
-                  <span className="h-0.5 w-full rounded bg-current" />
-                </span>
+                Live Photo 정리
               </button>
-              <div>
-                <h1 className="text-3xl font-extrabold tracking-tight text-slate-900 sm:text-4xl">
-                  {activeTab === "manager"
-                    ? "iOS Live Photo Manager"
-                    : "iOS 미디어 위치 국가 분류"}
-                </h1>
-                <p className="mt-1.5 text-sm text-slate-600">
-                  {activeTab === "manager"
-                    ? "아이폰 Live Photo ZIP 압축 해제 후 생기는 사진+동영상 중복을 정리합니다."
-                    : "선택한 폴더의 GPS 좌표를 읽어 국가 단위로 분류해 보여줍니다."}
-                </p>
-              </div>
-            </header>
-
+              <button
+                type="button"
+                className={`rounded px-2.5 py-1 text-sm font-semibold ${
+                  activeTab === "map"
+                    ? "bg-slate-900 text-white"
+                    : "text-slate-700 hover:bg-slate-100"
+                }`}
+                onClick={() => {
+                  void navigate({ to: "/map" });
+                }}
+              >
+                위치 국가 분류
+              </button>
+            </nav>
+            <span className="ml-auto text-xs font-semibold text-slate-500">
+              v0.0.0
+            </span>
+          </div>
+          <p className="px-3 py-1.5 text-xs text-slate-600">{tabDescription}</p>
+        </header>
+        <div className="lg:h-[calc(100vh-7.5rem)]">
+          <div className="min-w-0 flex-1 lg:h-full">
             {activeTab === "manager" ? (
               <ManagerView
                 panelClass={panelClass}
@@ -337,6 +418,7 @@ function App({ activeTab }: { activeTab: "manager" | "map" }) {
                 previewItems={previewItems}
                 visiblePreviewItems={visiblePreviewItems}
                 previewWindow={previewWindow}
+                previewLayout={previewLayout}
                 previewScrollRef={previewScrollRef}
                 onPickFolder={handlePickFolder}
                 onScan={() => {
@@ -346,10 +428,16 @@ function App({ activeTab }: { activeTab: "manager" | "map" }) {
                   void handleProcess(action);
                 }}
                 onPreviewScroll={handlePreviewScroll}
+                onTogglePreviewLayout={() => {
+                  setPreviewLayout((prev) =>
+                    prev === "single" ? "double" : "single",
+                  );
+                }}
               />
             ) : (
               <MapView
                 panelClass={panelClass}
+                desktopPanelHeightClass={desktopPanelHeightClass}
                 baseButtonClass={baseButtonClass}
                 loading={loading}
                 locationLoading={locationLoading}
@@ -369,7 +457,7 @@ function App({ activeTab }: { activeTab: "manager" | "map" }) {
       </div>
 
       <div
-        className={`fixed inset-0 z-20 lg:hidden ${drawerOpen ? "pointer-events-auto" : "pointer-events-none"}`}
+        className={`fixed inset-0 z-20 sm:hidden ${drawerOpen ? "pointer-events-auto" : "pointer-events-none"}`}
       >
         <button
           type="button"

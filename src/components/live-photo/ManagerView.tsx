@@ -9,6 +9,28 @@ import type {
 } from "./types";
 import { getFileName } from "./utils";
 
+function getUpperExtension(filePath?: string) {
+  if (!filePath) {
+    return null;
+  }
+  const fileName = getFileName(filePath);
+  const dotIndex = fileName.lastIndexOf(".");
+  if (dotIndex < 0) {
+    return null;
+  }
+  return fileName.slice(dotIndex).toUpperCase();
+}
+
+function getPreviewExtensions(photoPath?: string, videoPath?: string) {
+  const extensions = [getUpperExtension(photoPath), getUpperExtension(videoPath)].filter(
+    (ext): ext is string => Boolean(ext),
+  );
+  if (extensions.length === 0) {
+    return "";
+  }
+  return ` (${extensions.join(", ")})`;
+}
+
 function ManagerView({
   panelClass,
   desktopPanelHeightClass,
@@ -23,11 +45,13 @@ function ManagerView({
   previewItems,
   visiblePreviewItems,
   previewWindow,
+  previewLayout,
   previewScrollRef,
   onPickFolder,
   onScan,
   onProcess,
   onPreviewScroll,
+  onTogglePreviewLayout,
 }: {
   panelClass: string;
   desktopPanelHeightClass: string;
@@ -42,17 +66,19 @@ function ManagerView({
   previewItems: ScanPreviewItem[];
   visiblePreviewItems: ScanPreviewItem[];
   previewWindow: PreviewWindow;
+  previewLayout: "single" | "double";
   previewScrollRef: RefObject<HTMLDivElement>;
   onPickFolder: () => void;
   onScan: () => void;
   onProcess: (action: ProcessAction) => void;
   onPreviewScroll: (event: UIEvent<HTMLDivElement>) => void;
+  onTogglePreviewLayout: () => void;
 }) {
   return (
-    <div className="grid gap-3 lg:grid-cols-[1.28fr_1fr]">
-      <div className="min-w-0">
+    <div className="grid gap-3 lg:h-full lg:grid-cols-[1.28fr_1fr] lg:items-stretch">
+      <div className="min-w-0 lg:h-full">
         <section
-          className={`${panelClass} ${desktopPanelHeightClass} overflow-hidden`}
+          className={`${panelClass} ${desktopPanelHeightClass} flex flex-col overflow-hidden`}
         >
           <div className="border-b border-slate-200 px-4 py-3">
             <p className="text-sm font-semibold text-slate-900">폴더 선택</p>
@@ -60,7 +86,7 @@ function ManagerView({
               정리할 루트 폴더를 선택한 뒤 스캔을 실행하세요.
             </p>
           </div>
-          <div className="space-y-4 px-4 py-4">
+          <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-4 py-4">
             <div>
               <button
                 className={baseButtonClass}
@@ -163,21 +189,27 @@ function ManagerView({
       </div>
 
       <aside
-        className={`${panelClass} ${desktopPanelHeightClass} max-h-[72vh] flex flex-col p-2.5 lg:sticky lg:top-4 lg:max-h-none`}
+        className={`${panelClass} ${desktopPanelHeightClass} max-h-[72vh] flex flex-col p-2.5 lg:max-h-none`}
       >
         <div className="flex items-center justify-between border-b border-slate-200 px-1 pb-2 text-sm text-slate-600">
           <p className="font-semibold text-slate-900">미리보기</p>
-          <p>
-            {Math.min(previewLoadedCount, previewItems.length)}/
-            {previewItems.length}개
-          </p>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              className="rounded border border-slate-200 bg-white px-1.5 py-0.5 text-[11px] font-semibold text-slate-700 hover:bg-slate-50"
+              onClick={onTogglePreviewLayout}
+            >
+              {previewLayout === "single" ? "2열" : "1열"}
+            </button>
+            <p>{previewItems.length}개</p>
+          </div>
         </div>
         <p className="mt-1.5 px-1 text-xs text-slate-500">
           아래로 스크롤하면 20개씩 로드, 최대 100개만 렌더링합니다.
         </p>
         <div
           ref={previewScrollRef}
-          className="mt-2 min-h-0 flex-1 overflow-y-auto rounded-lg border border-slate-200 bg-slate-50/70"
+          className="mt-2 min-h-0 flex-1 overflow-y-auto overscroll-contain rounded-lg border border-slate-200 bg-slate-50/70"
           onScroll={onPreviewScroll}
         >
           {previewItems.length === 0 ? (
@@ -189,46 +221,89 @@ function ManagerView({
               {previewWindow.topPadding > 0 && (
                 <div style={{ height: `${previewWindow.topPadding}px` }} />
               )}
-              {visiblePreviewItems.map((item, index) => (
-                <article
-                  key={item.id}
-                  className="mb-2 h-[180px] overflow-hidden rounded-lg border border-slate-200 bg-white p-1.5"
-                >
-                  <div className="mb-2 flex items-center justify-between gap-2">
-                    <div className="truncate text-xs font-semibold text-slate-700">
-                      {previewWindow.start + index + 1}. {item.baseName}
-                    </div>
-                    <span
-                      className={`shrink-0 rounded px-1.5 py-0.5 text-[10px] font-semibold ${item.photoPath && item.videoPath ? "bg-emerald-100 text-emerald-700" : item.videoPath ? "bg-blue-100 text-blue-700" : "bg-amber-100 text-amber-700"}`}
+              {previewLayout === "single" ? (
+                <>
+                  {visiblePreviewItems.map((item, index) => (
+                    <article
+                      key={item.id}
+                      className="mb-2 h-[180px] overflow-hidden rounded-lg border border-slate-200 bg-white p-1.5"
                     >
-                      {item.photoPath && item.videoPath
-                        ? "쌍"
-                        : item.videoPath
-                          ? "동영상만"
-                          : "사진만"}
-                    </span>
-                  </div>
-                  <div className="grid h-[138px] grid-cols-2 gap-1.5">
-                    <div className="overflow-hidden rounded border border-slate-200 bg-slate-100">
-                      <PhotoPreview
-                        photoPath={item.photoPath}
-                        baseName={item.baseName}
-                      />
-                    </div>
-                    <div className="overflow-hidden rounded border border-slate-200 bg-slate-100">
-                      <VideoPreview videoPath={item.videoPath} />
-                    </div>
-                  </div>
-                  <div className="mt-1 grid grid-cols-2 gap-1.5 text-[10px] text-slate-500">
-                    <span className="truncate">
-                      {item.photoPath ? getFileName(item.photoPath) : "-"}
-                    </span>
-                    <span className="truncate">
-                      {item.videoPath ? getFileName(item.videoPath) : "-"}
-                    </span>
-                  </div>
-                </article>
-              ))}
+                      <div className="mb-2 flex items-center justify-between gap-2">
+                        <div className="truncate text-xs font-semibold text-slate-700">
+                          {previewWindow.start + index + 1}. {item.baseName}
+                          {getPreviewExtensions(item.photoPath, item.videoPath)}
+                        </div>
+                        <span
+                          className={`shrink-0 rounded px-1.5 py-0.5 text-[10px] font-semibold ${item.photoPath && item.videoPath ? "bg-emerald-100 text-emerald-700" : item.videoPath ? "bg-blue-100 text-blue-700" : "bg-amber-100 text-amber-700"}`}
+                        >
+                          {item.photoPath && item.videoPath
+                            ? "쌍"
+                            : item.videoPath
+                              ? "동영상만"
+                              : "사진만"}
+                        </span>
+                      </div>
+                      <div className="grid h-[138px] grid-cols-2 gap-1.5">
+                        <div className="overflow-hidden rounded border border-slate-200 bg-slate-100">
+                          <PhotoPreview
+                            photoPath={item.photoPath}
+                            baseName={item.baseName}
+                          />
+                        </div>
+                        <div className="overflow-hidden rounded border border-slate-200 bg-slate-100">
+                          <VideoPreview videoPath={item.videoPath} />
+                        </div>
+                      </div>
+                      <div className="mt-1 grid grid-cols-2 gap-1.5 text-[10px] text-slate-500">
+                        <span className="truncate">
+                          {item.photoPath ? getFileName(item.photoPath) : "-"}
+                        </span>
+                        <span className="truncate">
+                          {item.videoPath ? getFileName(item.videoPath) : "-"}
+                        </span>
+                      </div>
+                    </article>
+                  ))}
+                </>
+              ) : (
+                <div className="grid grid-cols-2 gap-2">
+                  {visiblePreviewItems.map((item, index) => (
+                    <article
+                      key={item.id}
+                      className="h-[164px] overflow-hidden rounded-lg border border-slate-200 bg-white p-1.5"
+                    >
+                      <div className="mb-1 flex items-center justify-between gap-1">
+                        <div className="truncate text-[11px] font-semibold text-slate-700">
+                          {previewWindow.start + index + 1}. {item.baseName}
+                          {getPreviewExtensions(item.photoPath, item.videoPath)}
+                        </div>
+                        <span
+                          className={`shrink-0 rounded px-1 py-0.5 text-[10px] font-semibold ${item.photoPath && item.videoPath ? "bg-emerald-100 text-emerald-700" : item.videoPath ? "bg-blue-100 text-blue-700" : "bg-amber-100 text-amber-700"}`}
+                        >
+                          {item.photoPath && item.videoPath
+                            ? "쌍"
+                            : item.videoPath
+                              ? "동영상만"
+                              : "사진만"}
+                        </span>
+                      </div>
+                      <div className="h-[126px] overflow-hidden rounded border border-slate-200 bg-slate-100">
+                        {item.photoPath ? (
+                          <PhotoPreview
+                            photoPath={item.photoPath}
+                            baseName={item.baseName}
+                          />
+                        ) : (
+                          <VideoPreview videoPath={item.videoPath} />
+                        )}
+                      </div>
+                      <div className="mt-1 truncate text-[10px] text-slate-500">
+                        {getFileName(item.photoPath ?? item.videoPath ?? "-")}
+                      </div>
+                    </article>
+                  ))}
+                </div>
+              )}
               {previewWindow.bottomPadding > 0 && (
                 <div style={{ height: `${previewWindow.bottomPadding}px` }} />
               )}

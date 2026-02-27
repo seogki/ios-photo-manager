@@ -4,6 +4,7 @@ import type { MediaLocationResult } from "./types";
 
 function MapView({
   panelClass,
+  desktopPanelHeightClass,
   baseButtonClass,
   loading,
   locationLoading,
@@ -16,6 +17,7 @@ function MapView({
   onRefreshLocations,
 }: {
   panelClass: string;
+  desktopPanelHeightClass: string;
   baseButtonClass: string;
   loading: boolean;
   locationLoading: boolean;
@@ -30,7 +32,7 @@ function MapView({
   const locationItems = locationResult?.items ?? [];
 
   return (
-    <section className={`${panelClass} overflow-hidden`}>
+    <section className={`${panelClass} ${desktopPanelHeightClass} overflow-hidden`}>
       <div className="border-b border-slate-200 px-4 py-3">
         <p className="text-sm font-semibold text-slate-900">위치 국가 분류</p>
         <p className="mt-0.5 text-xs text-slate-500">
