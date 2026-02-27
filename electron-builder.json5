@@ -1,0 +1,48 @@
+﻿// @see - https://www.electron.build/configuration/configuration
+{
+  $schema: "https://raw.githubusercontent.com/electron-userland/electron-builder/master/packages/app-builder-lib/scheme.json",
+  appId: "ios-photo-manager",
+  asar: true,
+  productName: "ios-photo-manager",
+  electronDownload: {
+    cache: "package_dir",
+  },
+  directories: {
+    output: "release/${version}",
+  },
+  files: ["dist", "dist-electron", "!package_dir/**"],
+  extraFiles: ["512x512.png"],
+  mac: {
+    target: ["dmg"],
+    artifactName: "${productName}-Mac-${version}-Installer.${ext}",
+  },
+  win: {
+    icon: "512x512.png",
+    target: [
+      {
+        target: "nsis",
+        arch: ["x64"],
+      },
+      {
+        target: "portable",
+        arch: ["x64"],
+      },
+    ],
+  },
+  nsis: {
+    oneClick: false,
+    perMachine: false,
+    allowToChangeInstallationDirectory: true,
+    deleteAppDataOnUninstall: false,
+    installerIcon: "build/icon.ico",
+    uninstallerIcon: "build/icon.ico",
+    artifactName: "${productName}-Windows-${version}-Setup-${arch}.${ext}",
+  },
+  portable: {
+    artifactName: "${productName}-Windows-${version}-${arch}.${ext}",
+  },
+  linux: {
+    target: ["AppImage"],
+    artifactName: "${productName}-Linux-${version}.${ext}",
+  },
+}
